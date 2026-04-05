@@ -1,76 +1,150 @@
 // content.js
-console.log("Extension by @FujiwaraChoki on GitHub.");
-const popup = document.createElement('div');
-popup.style.position = 'fixed';
-popup.style.backgroundColor = '#ffffff';
-popup.style.border = '2px solid #ddd';
-popup.style.borderRadius = '10px';
-popup.style.padding = '20px';
-popup.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.3)';
-popup.style.zIndex = '9999';
-popup.style.textAlign = 'center';
-popup.style.fontFamily = 'Arial, sans-serif';
-popup.style.color = '#333';
 
-// Center
-popup.style.top = '50%';
-popup.style.left = '50%';
-popup.style.transform = 'translate(-50%, -50%)';
+console.log("AI Reducer content script loaded.");
 
-// Dim the background
-document.body.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
-document.body.style.overflow = 'hidden';
+const LOCK_KEY = "__aiReducerLockUntil";
 
-const question = document.createElement('p');
-question.textContent = "Are you sure this is for the right reasons?";
-question.style.fontSize = '18px';
-question.style.marginBottom = '20px';
+// If a lockout is active, show it immediately
+const lockUntil = localStorage.getItem(LOCK_KEY);
+if (lockUntil && Date.now() < Number(lockUntil)) {
+  showLockout(Number(lockUntil));
+} else {
+  localStorage.removeItem(LOCK_KEY);
+  if (!window.__aiReducerInjected) {
+    window.__aiReducerInjected = true;
+    showFirstPopup();
+  }
+}
 
-const option1 = document.createElement('button');
-option1.textContent = "YES!!11!";
-option1.style.backgroundColor = '#e63946';
-option1.style.color = '#ffffff';
-option1.style.border = 'none';
-option1.style.borderRadius = '5px';
-option1.style.padding = '10px 20px';
-option1.style.cursor = 'pointer';
-option1.style.fontSize = '16px';
-option1.style.margin = '10px';
-option1.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)';
-option1.addEventListener('mouseover', () => (option1.style.backgroundColor = '#d62839'));
-option1.addEventListener('mouseout', () => (option1.style.backgroundColor = '#e63946'));
+//
+// FIRST POPUP
+//
+function showFirstPopup() {
+  const overlay = createOverlay();
 
-const option2 = document.createElement('button');
-option2.textContent = "Listen to Qur'an";
-option2.style.backgroundColor = '#457b9d';
-option2.style.color = '#ffffff';
-option2.style.border = 'none';
-option2.style.borderRadius = '5px';
-option2.style.padding = '10px 20px';
-option2.style.cursor = 'pointer';
-option2.style.fontSize = '16px';
-option2.style.margin = '10px';
-option2.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.2)';
-option2.addEventListener('mouseover', () => (option2.style.backgroundColor = '#1d3557'));
-option2.addEventListener('mouseout', () => (option2.style.backgroundColor = '#457b9d'));
+  const box = createBox();
+  box.innerHTML = `
+    <h1 style="margin:0 0 10px;font-size:22px;color:#222;">Reduce ChatGPT Usage</h1>
+    <p style="margin:0 0 20px;font-size:16px;color:#555;">Do you want to continue using ChatGPT?</p>
+  `;
 
-option1.addEventListener('click', function () {
-  closePopup();
-});
+  const btnRow = createBtnRow();
 
-option2.addEventListener('click', function () {
-  window.location.href = 'https://youtu.be/KvK_d9edjPM?si=45eAEFowvcAOfJ6y';
-  closePopup();
-});
+  const redirectBtn = createButton("Redirect to Google", "#4285f4");
+  redirectBtn.onclick = () => window.location.href = "https://www.google.com";
 
-popup.appendChild(question);
-popup.appendChild(option1);
-popup.appendChild(option2);
+  const cancelBtn = createButton("Cancel", "#e53935");
+  cancelBtn.onclick = () => {
+    overlay.remove();
+    startLockout(10); // 10-minute lockout
+  };
 
-document.body.appendChild(popup);
+  btnRow.appendChild(redirectBtn);
+  btnRow.appendChild(cancelBtn);
+  box.appendChild(btnRow);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+}
 
-function closePopup() {
-  popup.remove();
-  document.body.style.backgroundColor = '';
-  document.body.style.overflow = '';
+//
+// START LOCKOUT
+//
+function startLockout(minutes) {
+  const unlockTime = Date.now() + minutes * 60 * 1000;
+  localStorage.setItem(LOCK_KEY, unlockTime);
+  showLockout(unlockTime);
+}
+
+//
+// LOCKOUT SCREEN
+//
+function showLockout(untilTimestamp) {
+  const overlay = createOverlay();
+  overlay.style.backdropFilter = "blur(4px)";
+
+  const box = createBox();
+  box.innerHTML = `
+    <h2 style="margin-bottom:16px;">Come back later</h2>
+    <p style="margin-bottom:16px;">You can return in:</p>
+  `;
+
+  const timer = document.createElement("h1");
+  timer.style.fontSize = "28px";
+  timer.style.margin = "0 0 10px";
+  timer.style.color = "#222";
+
+  box.appendChild(timer);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
+
+  function updateTimer() {
+    const now = Date.now();
+    const diff = untilTimestamp - now;
+
+    if (diff <= 0) {
+      overlay.remove();
+      localStorage.removeItem(LOCK_KEY);
+      return;
+    }
+
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+
+    timer.textContent = `${mins}m ${secs}s`;
+
+    requestAnimationFrame(updateTimer);
+  }
+
+  updateTimer();
+}
+
+//
+// UI HELPERS
+//
+function createOverlay() {
+  const overlay = document.createElement("div");
+  overlay.setAttribute("ai-overlay", "1");
+  overlay.style.position = "fixed";
+  overlay.style.inset = "0";
+  overlay.style.background = "rgba(0, 0, 0, 0.65)";
+  overlay.style.zIndex = "999999";
+  overlay.style.display = "flex";
+  overlay.style.alignItems = "center";
+  overlay.style.justifyContent = "center";
+  overlay.style.userSelect = "none";
+  return overlay;
+}
+
+function createBox() {
+  const box = document.createElement("div");
+  box.style.background = "#ffffff";
+  box.style.borderRadius = "10px";
+  box.style.padding = "24px 28px";
+  box.style.maxWidth = "420px";
+  box.style.width = "90%";
+  box.style.boxShadow = "0 12px 30px rgba(0,0,0,0.25)";
+  box.style.fontFamily = "Arial, sans-serif";
+  box.style.textAlign = "center";
+  return box;
+}
+
+function createBtnRow() {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.justifyContent = "center";
+  row.style.gap = "12px";
+  return row;
+}
+
+function createButton(text, color) {
+  const btn = document.createElement("button");
+  btn.textContent = text;
+  btn.style.padding = "10px 18px";
+  btn.style.border = "none";
+  btn.style.borderRadius = "6px";
+  btn.style.background = color;
+  btn.style.color = "#fff";
+  btn.style.cursor = "pointer";
+  btn.style.fontSize = "14px";
+  return btn;
 }
